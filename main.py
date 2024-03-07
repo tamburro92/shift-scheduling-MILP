@@ -3,7 +3,9 @@ from solver import Solver, save_csv
 from pulp import LpStatus
 
 def main():
-    ob_weight = (0.33, 1, 0.33) # weight var_hours, var_leave, sum_leave
+    # weight var_hours, var_leave, sum_leave, var_split, sum_split
+    ob_weight = (0.33, 1, 0.33, 1, 0.33, 1, 0.33)
+    #ob_weight = (0.33, 1, 0.33, 1, 0.33, 1, 10000)
 
     from_date = date(2024, 2, 1)
     to_date = date(2024, 2, 29)
@@ -30,7 +32,7 @@ def main():
     for i in [1, 8, 15, 22, 29]:
         solver.add_c_employee_day_leave('Nunzia',i)
 
-    status = solver.solve(timeLimit=8, gapRel = 0.02, threads=1)
+    status = solver.solve(timeLimit=40, gapRel = 0.02, threads=1)
     print('status', LpStatus[status])
 
     save_csv(solver, 'calendar.csv')

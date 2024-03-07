@@ -85,18 +85,27 @@ class Solver():
 
         # variables
         shifts  = LpVariable.dicts("Shift", (days, shift_types, n_shifts, employees), cat="Binary")
-        diff_hours_emp = LpVariable.dicts("Variance Hours Employees", employees, cat='Continuous')
+        diff_hours_emp = LpVariable.dicts("Variance hours employee", employees, cat='Continuous')
         leave = LpVariable.dicts('Leave', (days, employees), cat="Binary")
-        diff_leave_emp = LpVariable.dicts("Variance Leave Employees", employees, cat='Continuous')
+        diff_leave_emp = LpVariable.dicts("Variance leave employee", employees, cat='Continuous')
+        split_shift_emp = LpVariable.dicts('Split shift day employee', (days, employees), cat="Binary")
+        diff_shift_emp = LpVariable.dicts('Variance split shift day employee', employees, cat="Continuous")
+        diff_leave_sun_sat_emp = LpVariable.dicts("Variance leave sunday saturday employee", employees, cat='Continuous')
+        leave_gap_2_days= LpVariable.dicts("Leave today and nextday", (days[:-1], employees), cat='Binary')
 
-        #problem
+        # problem
         problem = LpProblem("Shift", LpMinimize)
 
-        #Objective: minimize variance hours for employees, variance leave days, and maximize leaveday total
+        # Objective: minimize variance hours for employees, variance leave days, and maximize sum leaveday
         problem += lpSum(diff_hours_emp[i] for i in employees) * ob_weight[0] +\
             lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1]  +\
-            - lpSum(leave[d][i] for i in employees for d in days) * ob_weight[2] 
+            - lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
+            lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3]  +\
+            lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  +\
+            lpSum(diff_leave_sun_sat_emp[e] for e in employees) * ob_weight[5] +\
+            lpSum(leave_gap_2_days[d][e] for e in employees for d in days[:-1]) * ob_weight[6] 
 
+        ## Auxilary Constraints ##
         # Constraint 0: diff_hours_emp Compute variance for employee
         for e in employees:
             c = lpSum(shifts[d][t][i][e] * map_slot_hours_t_i[d][t][i].duration for d in days for t in shift_types for i in n_shifts)
@@ -115,6 +124,33 @@ class Solver():
                 for t in  shift_types: 
                     for i in n_shifts:
                         problem += shifts[d][t][i][e] + leave[d][e] <= 1
+        
+        # Constraint 0: bind split_shift_day_ = 1 if employee works 2 times in a day else 0
+        for e in employees: #   s * 2  <= - t +2
+            for d in days:
+                problem += split_shift_emp[d][e] * 2 <= lpSum(shifts[d][t][i][e] for t in shift_types for i in n_shifts)
+                problem += split_shift_emp[d][e]  >= lpSum(shifts[d][t][i][e] for t in shift_types for i in n_shifts) - 1
+
+        
+        # Constraint 0: diff_shift_emp Compute variance for employee
+        for e in employees:
+            c = lpSum(split_shift_emp[d][e] for d in days)
+            problem += diff_shift_emp[e] >= c - lpSum(split_shift_emp[d][ee] for ee in employees for d in days )/len(employees)
+            problem += diff_shift_emp[e] >=  lpSum(split_shift_emp[d][ee] for ee in employees for d in days )/len(employees) - c
+        
+        # Constraint 0: diff_leave_sun_sat_emp Compute variance for employee
+        for e in employees:
+            c = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])
+            problem += diff_leave_sun_sat_emp[e] >= c - lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees)
+            problem += diff_leave_sun_sat_emp[e] >=  lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees) - c
+
+        # Constraint 0: leave_gap_2_days
+        for e in employees:
+            for d in days[:-1]:
+                problem += leave_gap_2_days[d][e] * 2 <= leave[d][e] + leave[d+1][e]
+                problem += leave_gap_2_days[d][e] >= leave[d][e] + leave[d+1][e] - 1
+        
+        ## Problem Constraints ##
 
         # Constraint 1: Each employee can only work one shift per shifttype (morning, afternoon or evening)
         for d in days:
@@ -155,7 +191,7 @@ class Solver():
         for e in employees:
             c = None
             for d in days:
-                c += ( 1  - leave[d][e]) # work_day 1 - leave
+                c += ( 1  - leave[d][e]) # work_day = 1 - leave
                 if map_slot_hours_t_i[d]['M'][0].day_of_week == 7:
                     problem += c <= 5 
                     c = None
@@ -181,7 +217,6 @@ class Solver():
                 if c1 and c2:
                     problem += c1+c2 <= 1 
 
-
         # Constraint 8: For Opening and closing must be at least 1 senior
         for d in days:
             c1, c2 = None, None
@@ -194,12 +229,19 @@ class Solver():
             problem += c1 >= 1
             problem += c2 >= 1
 
+        # Constraint 9: for each type slot should be covered by 1 senior
+        for d in days:
+            for t in shift_types:
+                c1 += lpSum(shifts[d][t][i][e] for i in n_shifts for e in employees_senior) >= 1
+
 
         self.problem = problem
         self.shifts = shifts
         self.diff_hours_emp = diff_hours_emp
         self.leave = leave
         self.map_slot_hours_t_i = map_slot_hours_t_i
+        self.split_shift_emp = split_shift_emp
+        self.leave_gap_2_days = leave_gap_2_days
 
     def solve(self, timeLimit=8, gapRel = 0.02, threads=1):
         self.status = self.problem.solve(PULP_CBC_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads))
@@ -250,17 +292,23 @@ def save_csv(solver, name_csv):
     employees, n_shifts = solver.employees, solver.n_shifts
     shifts, leave = solver.shifts, solver.leave
     map_slot_hours_t_i = solver.map_slot_hours_t_i
+    split_shift_emp = solver.split_shift_emp
+    leave_gap_2_days = solver.leave_gap_2_days
 
     map_e_h = {}
     map_e_leave = {}
+    map_e_leave_sat_sun = {}
     map_e_spezzati = {}
+    map_e_split = {}
     data = []
     # init struct
-    for i in range(60):
+    for i in range(80):
         data.append({})
     for e in employees:
         map_e_h[e] = {}
         map_e_leave[e] = 0
+        map_e_leave_sat_sun[e] = 0
+        map_e_split[e] = 0
         map_e_spezzati[e] = {}
         map_e_h[e]['total'] = 0
         for w in range(int(from_date.strftime('%V')), int(to_date.strftime('%V'))+1):
@@ -285,7 +333,6 @@ def save_csv(solver, name_csv):
                         week = map_slot_hours_t_i[d][t][i].week
                         map_e_h[e]['total'] = map_slot_hours_t_i[d][t][i].duration + map_e_h[e]['total']
                         map_e_h[e][week] = map_slot_hours_t_i[d][t][i].duration + map_e_h[e][week]
-                        map_e_spezzati[e][d] = map_e_spezzati[e][d] + 1
                 j+=1
         # add leave days
         for e in employees:
@@ -294,26 +341,37 @@ def save_csv(solver, name_csv):
                 data[j][f'{d}:Da'] = 'Riposo'
                 data[j][f'{d}:Nome'] = e
                 map_e_leave[e] = map_e_leave[e] + 1
+                if map_slot_hours_t_i[d]['M'][0].day_of_week in [6,7]:
+                    map_e_leave_sat_sun[e] = map_e_leave_sat_sun[e] + 1
                 j+=1
+        for e in employees:
+            if split_shift_emp[d][e].varValue:
+                map_e_split[e] = map_e_split[e] + 1
 
     # Add total, week hours for employee
-    j+=2
+    j+=3
+    data[j]['Summary'] = 'Ore totali'
+    j+=1
     for k,v in map_e_h.items():
         data[j]['Summary'] = k + ' ' + str(v)
         j+=1
 
     # Add total leave days for employee
     j+=2
+    data[j]['Summary'] = 'Ferie totali'
+    j+=1
     for k,v in map_e_leave.items():
-        data[j]['Summary'] = k + ' ' + str(v)
+        gap_2_days = sum(leave_gap_2_days[d][k].varValue if leave_gap_2_days[d][k].varValue is not None else 0 for d in days[:-1] ) 
+        data[j]['Summary'] = '{}: {} ({}) | {}'.format(k, v, map_e_leave_sat_sun[k], gap_2_days)
         j+=1
-    '''
-    # Add total spezzati employee
+    
     j+=2
-    for k,v in map_e_spezzati.items():
+    data[j]['Summary'] = 'Spezzati totali'
+    j+=1
+    for k,v in map_e_split.items():
         data[j]['Summary'] = k + ' ' + str(v)
         j+=1
-    '''
+
     fieldnames = data[0].keys()
     with open(name_csv, 'w') as myfile:
         wr = csv.DictWriter(myfile,  fieldnames=fieldnames)
