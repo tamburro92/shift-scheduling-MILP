@@ -17,14 +17,14 @@ Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 slots_data = [{'from':'08:00', 'to':'16:00', 'type':'M', 'isOpening':True},
               {'from':'08:00', 'to':'12:00', 'type':'M','isOpening':True},
               {'from':'08:30', 'to':'13:00', 'type':'M'},
+              {'from':'09:30', 'to':'13:30', 'type':'M'},
               {'from':'09:00', 'to':'13:00', 'type':'M'},
-              {'from':'10:30', 'to':'13:30', 'type':'M'},
               
-              {'from':'13:00', 'to':'20:00', 'type':'A'},
               {'from':'12:00', 'to':'20:00', 'type':'A'},
               {'from':'13:00', 'to':'21:00', 'type':'A'},
+              {'from':'13:00', 'to':'20:00', 'type':'A'},
 
-              {'from':'16:00', 'to':'20:00', 'type':'E'},
+              {'from':'16:30', 'to':'20:30', 'type':'E'},
               {'from':'16:00', 'to':'20:00', 'type':'E'},
               {'from':'16:00', 'to':'20:00', 'type':'E'},
               {'from':'17:30', 'to':'21:00', 'type':'E', 'isClosing':True}]
@@ -32,7 +32,7 @@ slots_data = [{'from':'08:00', 'to':'16:00', 'type':'M', 'isOpening':True},
 slots_data_holiday = [{'from':'08:00', 'to':'14:30', 'type':'M','isOpening':True},
                       {'from':'08:00', 'to':'16:00', 'type':'M','isOpening':True},
                       {'from':'09:00', 'to':'13:00', 'type':'M'},
-                      {'from':'10:00', 'to':'13:00', 'type':'M'},
+                      {'from':'10:30', 'to':'13:30', 'type':'M'},
                       {'from':'14:30', 'to':'21:00', 'type':'A'},
                       {'from':'16:00', 'to':'20:00', 'type':'E'},
                       {'from':'16:00', 'to':'21:00', 'type':'E','isClosing':True}]
@@ -53,9 +53,10 @@ class TimeSlot():
 
 
 class Solver():
-    def __init__(self, from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight = (0.3,0.2,0.3)):
+    def __init__(self, from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight = (0.3,0.2,0.3), wekkend_pattern_const = False):
         self.ob_weight = ob_weight
-        
+        self.wekkend_pattern_const = wekkend_pattern_const
+
         self.from_date = from_date
         self.to_date = to_date
         self.num_days = (to_date - from_date).days + 1
@@ -74,6 +75,7 @@ class Solver():
         max_h_employee_for_day = self.max_h_employee_for_day
         min_h_employee_for_day = self.min_h_employee_for_day
         ob_weight = self.ob_weight
+        wekkend_pattern_const = self.wekkend_pattern_const
     
         map_slot_hours_t_i = compute_dict_slot_hours(slots_data, slots_data_holiday, self.from_date, self.num_days)
 
@@ -91,7 +93,7 @@ class Solver():
         split_shift_emp = LpVariable.dicts('Split shift day employee', (days, employees), cat="Binary")
         diff_shift_emp = LpVariable.dicts('Variance split shift day employee', employees, cat="Continuous")
         diff_leave_sun_sat_emp = LpVariable.dicts("Variance leave sunday saturday employee", employees, cat='Continuous')
-        leave_gap_2_days= LpVariable.dicts("Leave today and nextday", (days[:-1], employees), cat='Binary')
+        leave_gap_2_days = LpVariable.dicts("Leave today and nextday", (days[:-1], employees), cat='Binary')
 
         # problem
         problem = LpProblem("Shift", LpMinimize)
@@ -143,12 +145,13 @@ class Solver():
             c = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])
             problem += diff_leave_sun_sat_emp[e] >= c - lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees)
             problem += diff_leave_sun_sat_emp[e] >=  lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees) - c
-
+        
         # Constraint 0: leave_gap_2_days
-        for e in employees:
-            for d in days[:-1]:
-                problem += leave_gap_2_days[d][e] * 2 <= leave[d][e] + leave[d+1][e]
-                problem += leave_gap_2_days[d][e] >= leave[d][e] + leave[d+1][e] - 1
+        if ob_weight[6] != 0:
+            for e in employees:
+                for d in days[:-1]:
+                    problem += leave_gap_2_days[d][e] * 2 <= leave[d][e] + leave[d+1][e]
+                    problem += leave_gap_2_days[d][e] >= leave[d][e] + leave[d+1][e] - 1
         
         ## Problem Constraints ##
 
@@ -233,6 +236,26 @@ class Solver():
         for d in days:
             for t in shift_types:
                 c1 += lpSum(shifts[d][t][i][e] for i in n_shifts for e in employees_senior) >= 1
+
+        # Constraint 10: employee in a month should have a pattern of: saturday-monday leave, sunday leave, saturday leave
+        if wekkend_pattern_const:
+            for e in employees:
+                c1, c2 = None, None
+                l_list = []
+                for d in days:
+                    if map_slot_hours_t_i[d]['M'][0].day_of_week in [6]:
+                        c1 += leave[d][e]
+                    if map_slot_hours_t_i[d]['M'][0].day_of_week in [7]:
+                        c2 += leave[d][e]
+                    if map_slot_hours_t_i[d]['M'][0].day_of_week in [6] and d+1 <=days[-1]:
+                        l = LpVariable(f'weekend leave {d} {e}', lowBound=0, upBound=1, cat='Binary')
+                        problem += l * 2 <= leave[d][e] + leave[d+1][e]
+                        problem += l >= leave[d][e] + leave[d+1][e] - 1
+                        l_list.append(l)
+
+                if c1: problem += c1 >= 2
+                if c2: problem += c2 >= 2
+                if l_list: problem += lpSum(l_list) >= 1
 
 
         self.problem = problem

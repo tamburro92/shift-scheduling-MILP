@@ -3,19 +3,19 @@ from solver import Solver, save_csv
 from pulp import LpStatus
 
 def main():
-    # weight var_hours, var_leave, sum_leave, var_split, sum_split
-    ob_weight = (0.33, 1, 0.33, 1, 0.33, 1, 0.33)
-    #ob_weight = (0.33, 1, 0.33, 1, 0.33, 1, 10000)
+    # weight: var_hours, var_leave, sum_leave, var_split, sum_split, var_sun_sat, sum_leave_2_gap
+    #ob_weight = (0.33, 2, 3, 1, 0.33, 1, 0.33)
+    ob_weight = (0.5, 1, 0, 0.2, 0, 1, 0)
 
-    from_date = date(2024, 2, 1)
-    to_date = date(2024, 2, 29)
+    from_date = date(2024, 5, 1)
+    to_date = date(2024, 5, 31)
     employees = ['Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
     employees_senior = employees[0:5]
-    max_h_employee_for_day = 9
-    min_h_employee_for_day = 4
+    max_h_employee_for_day = 8
+    min_h_employee_for_day = 6
 
-    solver = Solver(from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight)
-
+    solver = Solver(from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight, wekkend_pattern_const = True)
+    '''
     solver.add_c_employee_day_leave('Bianca', 9)
     solver.add_c_employee_day_leave('Bianca', 10)
     solver.add_c_employee_day_leave('Pouya', 17)
@@ -31,7 +31,7 @@ def main():
     # Nunzia non lavora tutti i giovedi di febbraio
     for i in [1, 8, 15, 22, 29]:
         solver.add_c_employee_day_leave('Nunzia',i)
-
+    '''
     status = solver.solve(timeLimit=40, gapRel = 0.02, threads=1)
     print('status', LpStatus[status])
 
