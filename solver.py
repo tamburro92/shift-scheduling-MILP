@@ -53,9 +53,9 @@ class TimeSlot():
 
 
 class Solver():
-    def __init__(self, from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight = (0.3,0.2,0.3), wekkend_pattern_const = False):
+    def __init__(self, from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
         self.ob_weight = ob_weight
-        self.wekkend_pattern_const = wekkend_pattern_const
+        self.weekend_pattern_const = weekend_pattern_const
 
         self.from_date = from_date
         self.to_date = to_date
@@ -75,7 +75,7 @@ class Solver():
         max_h_employee_for_day = self.max_h_employee_for_day
         min_h_employee_for_day = self.min_h_employee_for_day
         ob_weight = self.ob_weight
-        wekkend_pattern_const = self.wekkend_pattern_const
+        weekend_pattern_const = self.weekend_pattern_const
     
         map_slot_hours_t_i = compute_dict_slot_hours(slots_data, slots_data_holiday, self.from_date, self.num_days)
 
@@ -141,13 +141,14 @@ class Solver():
             problem += diff_shift_emp[e] >=  lpSum(split_shift_emp[d][ee] for ee in employees for d in days )/len(employees) - c
         
         # Constraint 0: diff_leave_sun_sat_emp Compute variance for employee
-        for e in employees:
-            c = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])
-            problem += diff_leave_sun_sat_emp[e] >= c - lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees)
-            problem += diff_leave_sun_sat_emp[e] >=  lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees) - c
-        
+        if ob_weight[5]:
+            for e in employees:
+                c = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])
+                problem += diff_leave_sun_sat_emp[e] >= c - lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees)
+                problem += diff_leave_sun_sat_emp[e] >=  lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d]['M'][0].day_of_week in [6, 7])/len(employees) - c
+            
         # Constraint 0: leave_gap_2_days
-        if ob_weight[6] != 0:
+        if ob_weight[6]:
             for e in employees:
                 for d in days[:-1]:
                     problem += leave_gap_2_days[d][e] * 2 <= leave[d][e] + leave[d+1][e]
@@ -238,7 +239,7 @@ class Solver():
                 c1 += lpSum(shifts[d][t][i][e] for i in n_shifts for e in employees_senior) >= 1
 
         # Constraint 10: employee in a month should have a pattern of: saturday-monday leave, sunday leave, saturday leave
-        if wekkend_pattern_const:
+        if weekend_pattern_const:
             for e in employees:
                 c1, c2 = None, None
                 l_list = []
