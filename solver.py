@@ -32,9 +32,9 @@ slots_data_sat = [{'from':'08:00', 'to':'16:00', 'type':'F8'},
                       {'from':'09:30', 'to':'13:00', 'type':'F5'},
                       {'from':'16:00', 'to':'20:30', 'type':'F6'},
                       {'from':'17:30', 'to':'21:00', 'type':'F6'},
-                      {'from':'13:00', 'to':'21:00', 'type':'F7'}]
+                      {'from':'13:00', 'to':'21:00', 'type':'F7','isClosing':True}]
 
-slots_data_sun = [{'from':'08:00', 'to':'16:00', 'type':'F8'},
+slots_data_sun = [{'from':'08:00', 'to':'16:00', 'type':'F8','isOpening':True},
                       {'from':'08:30', 'to':'13:00', 'type':'F5'},
                       {'from':'09:30', 'to':'13:00', 'type':'F5'},
                       {'from':'16:00', 'to':'20:30', 'type':'F6'},
@@ -107,10 +107,10 @@ class Solver():
 
         # Objective: minimize variance hours for employees, variance leave days, and maximize sum leaveday
         problem += lpSum(diff_hours_emp[i] for i in employees) * ob_weight[0] +\
-            lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1]  +\
-            - lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
-            lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3]  +\
-            lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  
+            lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1] 
+            #- lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
+            #lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3]  
+            # lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  
             #lpSum(diff_leave_sun_sat_emp[e] for e in employees) * ob_weight[5] +\
             #lpSum(leave_gap_2_days[d][e] for e in employees for d in days[:-1]) * ob_weight[6] 
 
@@ -302,13 +302,15 @@ class Solver():
     def solve_PULP(self, timeLimit=8, gapRel = 0.02, threads=1):
         self.status = self.problem.solve(PULP_CBC_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads))
         return self.status
-    
+    def solve_GUROBI(self, timeLimit=8, gapRel = 0.02, threads=1):
+        self.status = self.problem.solve(GUROBI_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads))
+        return self.status
     def solve_GLPK(self, timeLimit=8):
         self.status = self.problem.solve(GLPK_CMD(timeLimit=timeLimit))
         return self.status
     
-    def solve_SCIP(self, timeLimit=8):
-        self.status = self.problem.solve(SCIP_CMD(timeLimit=timeLimit))
+    def solve_SCIP(self, timeLimit=8, gapRel = 0.02, threads=1):
+        self.status = self.problem.solve(SCIP_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads))
         return self.status
 
     def add_c_employee_day_leave(self, employee, day_leave):
