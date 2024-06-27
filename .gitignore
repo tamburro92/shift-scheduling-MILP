@@ -162,3 +162,5 @@ cython_debug/
 
 *.xlsx
 *.csv
+
+HiGHSstatic.v1.7.1.aarch64-apple-darwin/

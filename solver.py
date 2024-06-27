@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import collections
 import pulp
-from pulp import LpProblem, LpVariable, LpMinimize, lpSum, PULP_CBC_CMD, GLPK_CMD, GUROBI_CMD, SCIP_CMD
+from pulp import LpProblem, LpVariable, LpMinimize, lpSum, PULP_CBC_CMD, GLPK_CMD, GUROBI_CMD, SCIP_CMD, HiGHS_CMD
 import csv
 '''
 - Ogni impiegato puo lavorare 2 volte al giorno in turni non contigui
@@ -107,9 +107,9 @@ class Solver():
 
         # Objective: minimize variance hours for employees, variance leave days, and maximize sum leaveday
         problem += lpSum(diff_hours_emp[i] for i in employees) * ob_weight[0] +\
-            lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1] 
-            #- lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
-            #lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3]  
+            lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1]
+            #lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3] 
+            # - lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
             # lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  
             #lpSum(diff_leave_sun_sat_emp[e] for e in employees) * ob_weight[5] +\
             #lpSum(leave_gap_2_days[d][e] for e in employees for d in days[:-1]) * ob_weight[6] 
@@ -139,7 +139,6 @@ class Solver():
                 problem += split_shift_emp[d][e] * 2 <= lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d))
                 problem += split_shift_emp[d][e]  >= lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d)) - 1
 
-        
         # Constraint 0: diff_shift_emp Compute variance for employee
         for e in employees:
             c = lpSum(split_shift_emp[d][e] for d in days)
@@ -225,6 +224,7 @@ class Solver():
                 for i in self.get_indexes_shift(d):
                     if map_slot_hours_t_i[days[d]][i].isClosing:
                         c1+= shifts[days[d]][i][e]
+                for i in self.get_indexes_shift(d+1):
                     if map_slot_hours_t_i[days[d+1]][i].isOpening:
                         c2+= shifts[days[d+1]][i][e]
                 if c1 and c2:
@@ -232,14 +232,14 @@ class Solver():
 
         # Constraint 8: For Opening and closing must be at least 1 senior
         for d in days:
-            c1, c2 = None, None
             for i in self.get_indexes_shift(d):
+                c1, c2 = None, None
                 if map_slot_hours_t_i[d][i].isOpening:
-                    c1 += lpSum(shifts[d][i][e] for e in employees_senior)
+                    c1 = lpSum(shifts[d][i][e] for e in employees_senior)
+                    if c1: problem += c1 >= 1
                 if map_slot_hours_t_i[d][i].isClosing:
-                    c2 += lpSum(shifts[d][i][e] for e in employees_senior)
-            if c1: problem += c1 >= 1
-            if c2: problem += c2 >= 1
+                    c2 = lpSum(shifts[d][i][e] for e in employees_senior)
+                    if c2: problem += c2 >= 1
 
         # Constraint 9: for each type slot should be covered by 1 senior
         for d in days:
@@ -290,7 +290,6 @@ class Solver():
                         lw = None
                         l_list.clear()
 
-
         self.problem = problem
         self.shifts = shifts
         self.diff_hours_emp = diff_hours_emp
@@ -307,6 +306,10 @@ class Solver():
         return self.status
     def solve_GLPK(self, timeLimit=8):
         self.status = self.problem.solve(GLPK_CMD(timeLimit=timeLimit))
+        return self.status
+    
+    def solve_HiGHS(self, timeLimit=8, gapRel = 0.02, threads=1):
+        self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs', options=["--solver=choose"]))
         return self.status
     
     def solve_SCIP(self, timeLimit=8, gapRel = 0.02, threads=1):

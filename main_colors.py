@@ -4,7 +4,7 @@ import openpyxl
 import csv
 
 def main():
-    file_name = 'aprile_maggio.xlsx'
+    file_name = 'maggio.xlsx'
     employees = ['Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
     workbook = openpyxl.load_workbook(file_name)
 

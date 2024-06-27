@@ -1,6 +1,7 @@
 from datetime import date
 from solver import Solver, save_csv
 from pulp import LpStatus
+import highspy
 
 def main():
     # weight: var_hours, var_leave, sum_leave, var_split, sum_split, var_sun_sat, sum_leave_2_gap
@@ -11,8 +12,8 @@ def main():
     weekend_pattern_2_gap_const = True
     from_date = date(2024, 5, 1)
     to_date = date(2024, 5, 31)
-    employees = ['Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
-    employees_senior = employees[0:5]
+    employees = ['Raffaele', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
+    employees_senior = employees[0:4]
     max_h_employee_for_day = 8
     min_h_employee_for_day = 6.5
 
@@ -34,8 +35,13 @@ def main():
     for i in [1, 8, 15, 22, 29]:
         solver.add_c_employee_day_leave('Nunzia',i)
     '''
-    status = solver.solve_PULP(timeLimit=60, gapRel = 0.05, threads=4)
-    #status = solver.solve_SCIP(timeLimit=120)
+    #status = solver.solve_PULP(timeLimit=180, gapRel = 0.05, threads=16)
+    status = solver.solve_HiGHS(timeLimit=180, gapRel = 0.05, threads=16)
+
+    #status = solver.solve_GUROBI(timeLimit=60, gapRel = 0.05, threads=16)
+    #status = solver.solve_SCIP(timeLimit=600, gapRel = 0.05, threads=16)
+    #status = solver.solve_GLPK(timeLimit=60)
+
 
     print('status', LpStatus[status])
 
