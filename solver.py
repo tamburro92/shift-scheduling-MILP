@@ -94,38 +94,43 @@ class Solver():
 
         # variables
         shifts  = LpVariable.dicts("Shift", (days, n_shifts, employees), cat="Binary")
-        diff_hours_emp = LpVariable.dicts("Variance hours employee", employees, cat='Continuous')
+        min_max_hours_emp = LpVariable.dicts("min max hours employee", ['min','max'], cat='Continuous')
         leave = LpVariable.dicts('Leave', (days, employees), cat="Binary")
-        diff_leave_emp = LpVariable.dicts("Variance leave employee", employees, cat='Continuous')
-        split_shift_emp = LpVariable.dicts('Split shift day employee', (days, employees), cat="Binary")
-        diff_shift_emp = LpVariable.dicts('Variance split shift day employee', employees, cat="Continuous")
-        diff_leave_sun_sat_emp = LpVariable.dicts("Variance leave sunday saturday employee", employees, cat='Continuous')
+        min_max_split_emp = LpVariable.dicts("min max split shift day employee", ['min','max'], cat='Continuous')
+        min_max_leave_emp = LpVariable.dicts("min max leave employee", ['min','max'], cat='Continuous')
+        min_max_leave_sun_sat_emp = LpVariable.dicts("min max leave sunday saturday employee", ['min','max'], cat='Continuous')
         leave_gap_2_days = LpVariable.dicts("Leave today and nextday", (days[:-1], employees), cat='Binary')
 
         # problem
         problem = LpProblem("Shift", LpMinimize)
 
         # Objective: minimize variance hours for employees, variance leave days, and maximize sum leaveday
-        problem += lpSum(diff_hours_emp[i] for i in employees) * ob_weight[0] +\
-            lpSum(diff_leave_emp[i] for i in employees) * ob_weight[1]
-            #lpSum(diff_shift_emp[e] for e in employees) * ob_weight[3] 
+        problem +=  (min_max_hours_emp['max'] - min_max_hours_emp['min']) * ob_weight[0] +\
+                    (min_max_leave_emp['max'] - min_max_leave_emp['min']) * ob_weight[1] +\
+                    (min_max_split_emp['max'] - min_max_split_emp['min']) * ob_weight[3] 
             # - lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
             # lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  
             #lpSum(diff_leave_sun_sat_emp[e] for e in employees) * ob_weight[5] +\
             #lpSum(leave_gap_2_days[d][e] for e in employees for d in days[:-1]) * ob_weight[6] 
 
         ## Auxilary Constraints ##
+        '''# Variance
+        for e in employees:
+        c = lpSum(shifts[d][i][e] * map_slot_hours_t_i[d][i].duration for d in days for i in self.get_indexes_shift(d) )
+        problem += diff_hours_emp[e] >= c - lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees)
+        problem += diff_hours_emp[e] >=  lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees) - c
+        '''
         # Constraint 0: diff_hours_emp Compute variance for employee
         for e in employees:
-            c = lpSum(shifts[d][i][e] * map_slot_hours_t_i[d][i].duration for d in days for i in self.get_indexes_shift(d) )
-            problem += diff_hours_emp[e] >= c - lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees)
-            problem += diff_hours_emp[e] >=  lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees) - c
-        
+            sum_hours_e = lpSum(shifts[d][i][e] * map_slot_hours_t_i[d][i].duration for d in days for i in self.get_indexes_shift(d) )
+            problem += min_max_hours_emp['max'] >= sum_hours_e
+            problem += min_max_hours_emp['min'] <= sum_hours_e
+
         # Constraint 0: diff_leave_emp Compute variance for employee
         for e in employees:
-            c = lpSum(leave[d][e] for d in days)
-            problem += diff_leave_emp[e] >= c - lpSum( leave[d][ee] for ee in employees for d in days )/len(employees)
-            problem += diff_leave_emp[e] >=  lpSum( leave[d][ee] for ee in employees for d in days )/len(employees) - c
+            sum_leaves_e = lpSum(leave[d][e] for d in days)
+            problem += min_max_leave_emp['max'] >= sum_leaves_e
+            problem += min_max_leave_emp['min'] <= sum_leaves_e
 
         # Constraint 0: leave_day
         for d in days:
@@ -133,25 +138,19 @@ class Solver():
                 for i in self.get_indexes_shift(d):
                     problem += shifts[d][i][e] + leave[d][e] <= 1
         
-        # Constraint 0: bind split_shift_day_ = 1 if employee works 2 times in a day else 0
-        for e in employees: #   s * 2  <= - t +2
-            for d in days:
-                problem += split_shift_emp[d][e] * 2 <= lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d))
-                problem += split_shift_emp[d][e]  >= lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d)) - 1
-
         # Constraint 0: diff_shift_emp Compute variance for employee
         for e in employees:
-            c = lpSum(split_shift_emp[d][e] for d in days)
-            problem += diff_shift_emp[e] >= c - lpSum(split_shift_emp[d][ee] for ee in employees for d in days )/len(employees)
-            problem += diff_shift_emp[e] >=  lpSum(split_shift_emp[d][ee] for ee in employees for d in days )/len(employees) - c
-        
+            sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
+            problem += min_max_split_emp['max'] >= sum_split_e
+            problem += min_max_split_emp['min'] <= sum_split_e
+
         # Constraint 0: diff_leave_sun_sat_emp Compute variance for employee
         if ob_weight[5]:
             for e in employees:
-                c = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d][0].day_of_week in [6, 7])
-                problem += diff_leave_sun_sat_emp[e] >= c - lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d][0].day_of_week in [6, 7])/len(employees)
-                problem += diff_leave_sun_sat_emp[e] >=  lpSum(leave[d][ee] for ee in employees for d in days if map_slot_hours_t_i[d][0].day_of_week in [6, 7])/len(employees) - c
-            
+                sum_leave_6_7_e = lpSum(leave[d][e] for d in days if map_slot_hours_t_i[d][0].day_of_week in [6, 7])
+                problem += min_max_leave_sun_sat_emp['max'] >= sum_leave_6_7_e
+                problem += min_max_leave_sun_sat_emp['min'] <= sum_leave_6_7_e
+
         # Constraint 0: leave_gap_2_days
         if ob_weight[6]:
             for e in employees:
@@ -160,7 +159,6 @@ class Solver():
                     problem += leave_gap_2_days[d][e] >= leave[d][e] + leave[d+1][e] - 1
         
         ## Problem Constraints ##
-
         # Constraint 1: Each employee can only work one shift per shifttype (morning, afternoon or evening)
         for d in days:
             for e in employees:
@@ -290,12 +288,12 @@ class Solver():
                         lw = None
                         l_list.clear()
 
+        self.min_max_split_emp = min_max_split_emp
+        self.min_max_hours_emp = min_max_hours_emp
         self.problem = problem
         self.shifts = shifts
-        self.diff_hours_emp = diff_hours_emp
         self.leave = leave
         self.map_slot_hours_t_i = map_slot_hours_t_i
-        self.split_shift_emp = split_shift_emp
         self.leave_gap_2_days = leave_gap_2_days
 
     def solve_PULP(self, timeLimit=8, gapRel = 0.02, threads=1):
@@ -370,8 +368,10 @@ def save_csv(solver, name_csv):
     employees, n_shifts = solver.employees, solver.n_shifts
     shifts, leave = solver.shifts, solver.leave
     map_slot_hours_t_i = solver.map_slot_hours_t_i
-    split_shift_emp = solver.split_shift_emp
+    #split_shift_emp = solver.split_shift_emp
     leave_gap_2_days = solver.leave_gap_2_days
+
+    #print(solver.min_max_hours_emp)
 
     map_e_h = {}
     map_e_leave = {}
@@ -421,9 +421,15 @@ def save_csv(solver, name_csv):
                 if map_slot_hours_t_i[d][0].day_of_week in [6,7]:
                     map_e_leave_sat_sun[e] = map_e_leave_sat_sun[e] + 1
                 j+=1
-        for e in employees:
-            if split_shift_emp[d][e].varValue:
-                map_e_split[e] = map_e_split[e] + 1
+
+    for e in employees:
+        lastday = -1
+        for d in days:
+            for i in solver.get_indexes_shift(d):
+                if shifts[d][i][e].varValue:
+                    if lastday == d:
+                        map_e_split[e] = map_e_split[e] + 1
+                    lastday = d
 
     # Add total, week hours for employee
     j+=3

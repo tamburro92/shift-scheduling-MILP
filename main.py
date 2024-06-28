@@ -1,7 +1,6 @@
 from datetime import date
 from solver import Solver, save_csv
 from pulp import LpStatus
-import highspy
 
 def main():
     # weight: var_hours, var_leave, sum_leave, var_split, sum_split, var_sun_sat, sum_leave_2_gap
@@ -35,11 +34,11 @@ def main():
     for i in [1, 8, 15, 22, 29]:
         solver.add_c_employee_day_leave('Nunzia',i)
     '''
-    #status = solver.solve_PULP(timeLimit=180, gapRel = 0.05, threads=16)
-    status = solver.solve_HiGHS(timeLimit=180, gapRel = 0.05, threads=16)
+    #status = solver.solve_PULP(timeLimit=120, gapRel = 0.05, threads=16)
+    status = solver.solve_HiGHS(timeLimit=120, gapRel = 0.05, threads=16)
 
     #status = solver.solve_GUROBI(timeLimit=60, gapRel = 0.05, threads=16)
-    #status = solver.solve_SCIP(timeLimit=600, gapRel = 0.05, threads=16)
+    #status = solver.solve_SCIP(timeLimit=60, gapRel = 0.05, threads=16)
     #status = solver.solve_GLPK(timeLimit=60)
 
 
