@@ -9,14 +9,15 @@ def main():
     
     weekend_pattern_const = True
     weekend_pattern_2_gap_const = True
-    from_date = date(2024, 5, 1)
-    to_date = date(2024, 5, 31)
+    from_date = date(2024, 7, 1)
+    to_date = date(2024, 7, 31)
     employees = ['Raffaele', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
     employees_senior = employees[0:4]
     max_h_employee_for_day = 8
     min_h_employee_for_day = 6.5
+    max_n_split_employee_for_week = 3
 
-    solver = Solver(from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, ob_weight, weekend_pattern_const, weekend_pattern_2_gap_const)
+    solver = Solver(from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, ob_weight, weekend_pattern_const, weekend_pattern_2_gap_const)
     '''
     solver.add_c_employee_day_leave('Bianca', 9)
     solver.add_c_employee_day_leave('Bianca', 10)
