@@ -10,7 +10,7 @@ def main():
     weekend_pattern_const = True
     weekend_pattern_2_gap_const = True
     from_date = date(2024, 7, 1)
-    to_date = date(2024, 7, 31)
+    to_date = date(2024, 7, 28)
     employees = ['Raffaele', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
     employees_senior = employees[0:4]
     max_h_employee_for_day = 8
