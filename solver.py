@@ -42,6 +42,8 @@ slots_data_sun = [{'from':'08:00', 'to':'16:00', 'type':'F8','isOpening':True},
 
 extra_slot = {'from':'08:00', 'to':'16:00', 'type':'EXTRA'}
 
+MIP_TOLERANCE = 1e-6
+
 class TimeSlot():
     def __init__(self, t_from=None, t_to=None, type=None, isOpening=False, isClosing=False, date=None, idx=None):
         self.day = date.day
@@ -113,10 +115,10 @@ class Solver():
         problem = LpProblem("Shift", LpMinimize)
 
         # Objective: minimize
-        problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 5 +\
-                    (min_max_split_emp['max'] - min_max_split_emp['min']) * 3 +\
-                    (min_max_hours_emp['max'] - min_max_hours_emp['min']) * 1 +\
-                    (min_max_extra_slot['max'] - min_max_extra_slot['min']) * 1
+        problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 50 +\
+                    (min_max_split_emp['max'] - min_max_split_emp['min']) * 30 +\
+                    (min_max_hours_emp['max'] - min_max_hours_emp['min']) * 10 +\
+                    (min_max_extra_slot['max'] - min_max_extra_slot['min']) * 10
             
         '''
         problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 5 +\
@@ -338,7 +340,7 @@ class Solver():
         return self.status
     
     def solve_HiGHS(self, timeLimit=8, gapRel = 0.02, threads=1):
-        self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs', options=["mip_feasibility_tolerance = 1e-10"]))
+        self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs', options=[f"mip_feasibility_tolerance = {MIP_TOLERANCE}"]))
         return self.status
     
     def solve_SCIP(self, timeLimit=8, gapRel = 0.02, threads=1):
@@ -450,7 +452,7 @@ def save_csv(solver, name_csv):
         # add slots
         for i in solver.get_indexes_shift(d):
             for e in employees:
-                if shifts[d][i][e].varValue:
+                if abs(1 - shifts[d][i][e].varValue) <= MIP_TOLERANCE:
                     data[j][f'{d}:Giorno'] = d
                     data[j][f'{d}:Da'] = f'{map_slot_hours_t_i[d][i].t_from.strftime("%H:%M")} - {map_slot_hours_t_i[d][i].t_to.strftime("%H:%M")}'
                     data[j][f'{d}:Durata H'] = map_slot_hours_t_i[d][i].duration
@@ -465,7 +467,7 @@ def save_csv(solver, name_csv):
 
         # add leave days
         for e in employees:
-            if leave[d][e].varValue:
+            if abs(1 - leave[d][e].varValue) <= MIP_TOLERANCE:
                 data[j][f'{d}:Giorno'] = d
                 data[j][f'{d}:Da'] = 'Riposo'
                 data[j][f'{d}:Nome'] = e
@@ -482,7 +484,7 @@ def save_csv(solver, name_csv):
         lastday = -1
         for d in days:
             for i in solver.get_indexes_shift(d):
-                if shifts[d][i][e].varValue:
+                if abs(1 - shifts[d][i][e].varValue) <= MIP_TOLERANCE:
                     if lastday == d:
                         map_e_split[e] = map_e_split[e] + 1
                     lastday = d
@@ -500,8 +502,8 @@ def save_csv(solver, name_csv):
     data[j]['Summary'] = 'Ferie totali'
     j+=1
     for k,v in map_e_leave.items():
-        gap_2_days = sum(leave_gap_2_days[d][k].varValue if leave_gap_2_days[d][k].varValue is not None else 0 for d in days[:-1] ) 
-        data[j]['Summary'] = '{}: {} ({}) | {}'.format(k, v, map_e_leave_sat_sun[k], gap_2_days)
+        #gap_2_days = sum(leave_gap_2_days[d][k].varValue if leave_gap_2_days[d][k].varValue is not None else 0 for d in days[:-1] ) 
+        data[j]['Summary'] = '{}: {} ({}) '.format(k, v, map_e_leave_sat_sun[k])
         j+=1
     
     j+=2

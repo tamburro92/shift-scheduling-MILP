@@ -4,7 +4,7 @@ from pulp import LpStatus
 
 def main():
 
-    ob_weight = (5, 3, 1, 1)
+    ob_weight = (50, 33, 10, 10)
     
     weekend_pattern_const = True
     from_date = date(2024, 7, 1)
@@ -35,8 +35,8 @@ def main():
     for i in [1, 8, 15, 22, 29]:
         solver.add_c_employee_day_leave('Nunzia',i)
     '''
-    status = solver.solve_PULP(timeLimit=200, gapRel = 0.05, threads=16)
-    #status = solver.solve_HiGHS(timeLimit=120, gapRel = 0.05, threads=16)
+    #status = solver.solve_PULP(timeLimit=200, gapRel = 0.05, threads=16)
+    status = solver.solve_HiGHS(timeLimit=60, gapRel = 0.05, threads=16)
 
     #status = solver.solve_GUROBI(timeLimit=60, gapRel = 0.05, threads=16)
     #status = solver.solve_SCIP(timeLimit=120, gapRel = 0.05, threads=16)
