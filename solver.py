@@ -110,6 +110,7 @@ class Solver():
         min_max_leave_emp = LpVariable.dicts("min max leave employee", ['min','max'], cat='Integer')
         min_max_leave_emp_week = LpVariable.dicts("min max leave week employee", (['min','max'], weeks), cat='Integer')
         min_max_extra_slot = LpVariable.dicts("min max extra slot for day", ['min','max'], cat='Integer')
+        variance_extra_slot = LpVariable.dicts("variance extra slot for day", days, cat='Continuous')
         
         # problem
         problem = LpProblem("Shift", LpMinimize)
@@ -118,7 +119,9 @@ class Solver():
         problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 50 +\
                     (min_max_split_emp['max'] - min_max_split_emp['min']) * 30 +\
                     (min_max_hours_emp['max'] - min_max_hours_emp['min']) * 10 +\
-                    (min_max_extra_slot['max'] - min_max_extra_slot['min']) * 10
+                    lpSum(variance_extra_slot[d] for d in days)/len(days) * 30
+                    #(min_max_extra_slot['max'] - min_max_extra_slot['min']) * 10
+
             
         '''
         problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 5 +\
@@ -169,6 +172,13 @@ class Solver():
             sum_shift_extra = lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d) for e in employees if map_slot_hours_t_i[d][i].type == 'EXTRA')
             problem += min_max_extra_slot['max'] >= sum_shift_extra
             problem += min_max_extra_slot['min'] <= sum_shift_extra
+        
+        # Constraint 0: variance_extra_slot compute variance of extra slot for day
+        for d in days:
+            x = lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d) for e in employees if map_slot_hours_t_i[d][i].type == 'EXTRA')
+            mx = lpSum(shifts[dd][i][e] for e in employees for dd in days for i in self.get_indexes_shift(dd) if map_slot_hours_t_i[dd][i].type == 'EXTRA' )/len(days)
+            problem += variance_extra_slot[d] >= x - mx
+            problem += variance_extra_slot[d] >= mx - x
 
         # Constraint 0: same above for weeks
         for e in employees:
@@ -338,7 +348,7 @@ class Solver():
     def solve_GLPK(self, timeLimit=8):
         self.status = self.problem.solve(GLPK_CMD(timeLimit=timeLimit))
         return self.status
-    
+ 
     def solve_HiGHS(self, timeLimit=8, gapRel = 0.02, threads=1):
         self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs', options=[f"mip_feasibility_tolerance = {MIP_TOLERANCE}"]))
         return self.status
