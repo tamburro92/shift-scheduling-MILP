@@ -3,6 +3,8 @@ import collections
 import pulp
 from pulp import LpProblem, LpVariable, LpMinimize, lpSum, PULP_CBC_CMD, GLPK_CMD, GUROBI_CMD, SCIP_CMD, HiGHS_CMD
 import csv
+import json
+
 '''
 - Ogni impiegato puo lavorare 2 volte al giorno in turni non contigui
 - Ogni impiegato lavora massimo 5 volte in 1 settimana
@@ -15,13 +17,13 @@ Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 '''
 #36h 61, w=377
 slots_data = [{'from':'08:00', 'to':'14:30', 'type':'F4'},
-              {'from':'08:30', 'to':'13:00', 'type':'F1'},
+              {'from':'08:00', 'to':'13:00', 'type':'F1'},
               {'from':'09:00', 'to':'13:00', 'type':'F1'},
               {'from':'10:00', 'to':'13:30', 'type':'F1'},
               
               {'from':'16:00', 'to':'20:00', 'type':'F2'},
               {'from':'16:00', 'to':'20:30', 'type':'F2'},
-              {'from':'16:30', 'to':'20:00', 'type':'F2'},
+              {'from':'17:00', 'to':'20:00', 'type':'F2'},
 
               {'from':'13:00', 'to':'21:00', 'type':'F3'},
               {'from':'14:30', 'to':'21:00', 'type':'F3'}]
@@ -40,9 +42,11 @@ slots_data_sun = [{'from':'08:00', 'to':'16:00', 'type':'F8','isOpening':True},
                       {'from':'17:30', 'to':'21:00', 'type':'F6'},
                       {'from':'13:00', 'to':'21:00', 'type':'F7'}]
 
-extra_slot = {'from':'08:00', 'to':'16:00', 'type':'EXTRA'}
+extra_slot = {'from':'12:30', 'to':'20:30', 'type':'EXTRA'}
 
 MIP_TOLERANCE = 1e-6
+
+FORMAT_DATE = "%d/%m/%Y"
 
 class TimeSlot():
     def __init__(self, t_from=None, t_to=None, type=None, isOpening=False, isClosing=False, date=None, idx=None):
@@ -528,3 +532,53 @@ def save_csv(solver, name_csv):
         wr = csv.DictWriter(myfile,  fieldnames=fieldnames)
         wr.writeheader()
         wr.writerows(data)
+
+def response_build(solver):
+    from_date, to_date = solver.from_date, solver.to_date
+    days, shift_types = solver.days, solver.shift_types
+    employees, n_shifts = solver.employees, solver.n_shifts
+    shifts, leave = solver.shifts, solver.leave
+    map_slot_hours_t_i = solver.map_slot_hours_t_i
+    #split_shift_emp = solver.split_shift_emp
+    leave_gap_2_days = solver.leave_gap_2_days
+
+
+    response = {}
+    scheduling = {}
+    response['scheduling'] = scheduling
+    # loop
+    for d in days:
+        j = 0
+        # add slots
+        for i in solver.get_indexes_shift(d):
+            for e in employees:
+                if abs(1 - shifts[d][i][e].varValue) <= MIP_TOLERANCE:
+                    date_str = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
+                    shift = {}
+                    shift['giorno'] = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
+                    shift['da'] = f'{map_slot_hours_t_i[d][i].t_from.strftime("%H:%M")} - {map_slot_hours_t_i[d][i].t_to.strftime("%H:%M")}'
+                    shift['durata'] = map_slot_hours_t_i[d][i].duration
+                    shift['tipo'] = map_slot_hours_t_i[d][i].type
+                    shift['nome'] = e
+                    if date_str not in scheduling:
+                         scheduling[date_str] = []
+                    scheduling[date_str].append(shift)              
+
+        # add leave days
+        for e in employees:
+            if abs(1 - leave[d][e].varValue) <= MIP_TOLERANCE:
+                    date_str = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
+                    shift = {}
+                    shift['giorno'] = map_slot_hours_t_i[d][0].date.strftime(FORMAT_DATE)
+                    shift['da'] = ''
+                    shift['durata'] = ''
+                    shift['tipo'] = 'Riposo'
+                    shift['nome'] = e
+                    if date_str not in scheduling:
+                         scheduling[date_str] = []
+                    scheduling[date_str].append(shift)   
+    
+    return json.dumps(response)
+
+
+    

@@ -1,5 +1,5 @@
 from datetime import date
-from solver import Solver, save_csv
+from solver import Solver, save_csv, response_build
 from pulp import LpStatus
 
 def main():
@@ -46,6 +46,7 @@ def main():
     print('status', LpStatus[status])
 
     save_csv(solver, 'calendar.csv')
+    print(response_build(solver))
 
 if __name__ == '__main__':
     main()
