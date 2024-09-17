@@ -16,33 +16,32 @@ Personale : 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', '
 Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 '''
 #36h 61, w=377
-slots_data = [{'from':'08:00', 'to':'14:30', 'type':'F4'},
-              {'from':'08:00', 'to':'13:00', 'type':'F1'},
-              {'from':'09:00', 'to':'13:00', 'type':'F1'},
-              {'from':'10:00', 'to':'13:30', 'type':'F1'},
+
+#36h 61, w=377
+slots_data = [{'from':'08:00', 'to':'15:00', 'type':'F4'},
               
-              {'from':'16:00', 'to':'20:00', 'type':'F2'},
-              {'from':'16:00', 'to':'20:30', 'type':'F2'},
+              {'from':'11:00', 'to':'15:00', 'type':'F1'},
+              {'from':'10:00', 'to':'14:00', 'type':'F1'},
+              {'from':'17:30', 'to':'20:30', 'type':'F2'},
               {'from':'17:00', 'to':'20:00', 'type':'F2'},
 
-              {'from':'13:00', 'to':'21:00', 'type':'F3'},
-              {'from':'14:30', 'to':'21:00', 'type':'F3'}]
+              {'from':'14:00', 'to':'21:00', 'type':'F3'}]
 
-slots_data_sat = [{'from':'08:00', 'to':'16:00', 'type':'F8'},
-                      {'from':'08:30', 'to':'13:00', 'type':'F5'},
-                      {'from':'09:30', 'to':'13:00', 'type':'F5'},
-                      {'from':'16:00', 'to':'20:30', 'type':'F6'},
-                      {'from':'17:30', 'to':'21:00', 'type':'F6'},
-                      {'from':'13:00', 'to':'21:00', 'type':'F7','isClosing':True}]
+slots_data_sat = [{'from':'08:00', 'to':'15:00', 'type':'F8'},
+                  
+                {'from':'09:00', 'to':'13:00', 'type':'F5'},
+                {'from':'18:00', 'to':'21:00', 'type':'F6'},
+    
+                {'from':'14:00', 'to':'21:00', 'type':'F7','isClosing':True}]
 
-slots_data_sun = [{'from':'08:00', 'to':'16:00', 'type':'F8','isOpening':True},
-                      {'from':'08:30', 'to':'13:00', 'type':'F5'},
-                      {'from':'09:30', 'to':'13:00', 'type':'F5'},
-                      {'from':'16:00', 'to':'20:30', 'type':'F6'},
-                      {'from':'17:30', 'to':'21:00', 'type':'F6'},
-                      {'from':'13:00', 'to':'21:00', 'type':'F7'}]
+slots_data_sun = [{'from':'08:00', 'to':'15:00', 'type':'F8'},
+                  
+                {'from':'09:00', 'to':'13:00', 'type':'F5'},
+                {'from':'18:00', 'to':'21:00', 'type':'F6'},
+    
+                {'from':'14:00', 'to':'21:00', 'type':'F7','isClosing':True}]
 
-extra_slot = {'from':'12:30', 'to':'20:30', 'type':'EXTRA'}
+extra_slot = {'from':'13:00', 'to':'20:00', 'type':'EXTRA'}
 
 MIP_TOLERANCE = 1e-6
 
@@ -63,7 +62,7 @@ class TimeSlot():
         self.idx_of_day = idx
 
 class Solver():
-    def __init__(self, from_date, to_date, employees, employees_senior, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
+    def __init__(self, from_date, to_date, employees, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
         self.ob_weight = ob_weight
         self.weekend_pattern_const = weekend_pattern_const
 
@@ -71,7 +70,6 @@ class Solver():
         self.to_date = to_date
         self.num_days = (to_date - from_date).days + 1
         self.employees = employees
-        self.employees_senior = employees_senior
         self.days = [i for i in range(from_date.day, to_date.day+1)]
         self.weeks = range(int(from_date.strftime("%V")), int(to_date.strftime("%V")) + 1 )
         self.shift_types = ['F4', 'F1', 'F2', 'F3','F8','F5','F6','F7', 'EXTRA']
@@ -99,7 +97,6 @@ class Solver():
         days = self.days
         weeks = self.weeks
         employees = self.employees
-        employees_senior = self.employees_senior
         shift_types = self.shift_types
         n_shifts = self.n_shifts
 
@@ -294,24 +291,7 @@ class Solver():
                         c2+= shifts[days[d+1]][i][e]
                 if c1 and c2:
                     problem += c1+c2 <= 1 
-
-        # Constraint 8: For Opening and closing must be at least 1 senior
-        for d in days:
-            for i in self.get_indexes_shift(d):
-                c1, c2 = None, None
-                if map_slot_hours_t_i[d][i].isOpening:
-                    c1 = lpSum(shifts[d][i][e] for e in employees_senior)
-                    if c1: problem += c1 >= 1
-                if map_slot_hours_t_i[d][i].isClosing:
-                    c2 = lpSum(shifts[d][i][e] for e in employees_senior)
-                    if c2: problem += c2 >= 1
-
-        # Constraint 9: for each type slot should be covered by 1 senior
-        for d in days:
-            for t in ['F4', 'F1', 'F2', 'F3', 'F7', 'F8']:
-                c = lpSum(shifts[d][i][e] for i in self.get_indexes_shift(d, t) for e in employees_senior )
-                if c: problem += c >= 1
-
+        
         # Constraint 10: employee in a month should have a pattern of: saturday-sunday leave, sunday leave, saturday leave
         if weekend_pattern_const:
             for e in employees:

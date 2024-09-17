@@ -4,8 +4,8 @@ import openpyxl
 import csv
 
 def main():
-    file_name = 'luglio.xlsx'
-    employees = ['Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca', 'Viviana', 'Pouya', 'Chiara', 'Giacomo', 'Bianca']
+    file_name = 'settembre.xlsx'
+    employees = ['Raffaele', 'Roberta', 'Giacomo', 'Nunzia', 'Pouya', 'Viviana']
     workbook = openpyxl.load_workbook(file_name)
 
     for ws in workbook:
