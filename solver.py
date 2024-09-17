@@ -4,7 +4,7 @@ import pulp
 from pulp import LpProblem, LpVariable, LpMinimize, lpSum, PULP_CBC_CMD, GLPK_CMD, GUROBI_CMD, SCIP_CMD, HiGHS_CMD
 import csv
 import json
-
+import copy
 '''
 - Ogni impiegato puo lavorare 2 volte al giorno in turni non contigui
 - Ogni impiegato lavora massimo 5 volte in 1 settimana
@@ -18,30 +18,33 @@ Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 #36h 61, w=377
 
 #36h 61, w=377
-slots_data = [{'from':'08:00', 'to':'15:00', 'type':'F4'},
-              
-              {'from':'11:00', 'to':'15:00', 'type':'F1'},
-              {'from':'10:00', 'to':'14:00', 'type':'F1'},
-              {'from':'17:30', 'to':'20:30', 'type':'F2'},
-              {'from':'17:00', 'to':'20:00', 'type':'F2'},
-
-              {'from':'14:00', 'to':'21:00', 'type':'F3'}]
-
-slots_data_sat = [{'from':'08:00', 'to':'15:00', 'type':'F8'},
-                  
+#F1/2 - 5/6 spezzati
+slots_data = {}
+slots_data[1] = [{'from':'08:00', 'to':'12:00', 'type':'F1'},
+              {'from':'08:00', 'to':'13:00', 'type':'F1'},
+              {'from':'09:00', 'to':'13:00', 'type':'F1', 'min_emp':7},
+              {'from':'12:00', 'to':'20:00', 'type':'F3'},
+              {'from':'13:00', 'to':'21:00', 'type':'F3'},
+              {'from':'16:00', 'to':'20:00', 'type':'F2', 'min_emp':7},
+              {'from':'17:00', 'to':'20:00', 'type':'F2'}]
+slots_data[2] =[{'from':'08:00', 'to':'12:00', 'type':'F1'},
+              {'from':'08:00', 'to':'13:00', 'type':'F1'},
+              {'from':'09:00', 'to':'13:00', 'type':'F1', 'min_emp':7},
+              {'from':'12:00', 'to':'20:00', 'type':'F3'},
+              {'from':'13:00', 'to':'20:30', 'type':'F3'},
+              {'from':'16:00', 'to':'20:00', 'type':'F2', 'min_emp':7},
+              {'from':'17:00', 'to':'20:00', 'type':'F2'}]
+slots_data[6] = [{'from':'08:00', 'to':'16:00', 'type':'F8'}, 
                 {'from':'09:00', 'to':'13:00', 'type':'F5'},
-                {'from':'18:00', 'to':'21:00', 'type':'F6'},
-    
-                {'from':'14:00', 'to':'21:00', 'type':'F7','isClosing':True}]
-
-slots_data_sun = [{'from':'08:00', 'to':'15:00', 'type':'F8'},
-                  
-                {'from':'09:00', 'to':'13:00', 'type':'F5'},
-                {'from':'18:00', 'to':'21:00', 'type':'F6'},
-    
-                {'from':'14:00', 'to':'21:00', 'type':'F7','isClosing':True}]
+                {'from':'10:00', 'to':'13:00', 'type':'F5'},
+                {'from':'16:00', 'to':'20:00', 'type':'F6'},
+                {'from':'16:00', 'to':'21:00', 'type':'F6'}]
+slots_data[5] = slots_data[1]
+slots_data[3] = slots_data[4] = slots_data[2]
+slots_data[7] = slots_data[6] 
 
 extra_slot = {'from':'13:00', 'to':'20:00', 'type':'EXTRA'}
+N_EXTRA_SLOT = 1
 
 MIP_TOLERANCE = 1e-6
 
@@ -62,7 +65,7 @@ class TimeSlot():
         self.idx_of_day = idx
 
 class Solver():
-    def __init__(self, from_date, to_date, employees, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
+    def __init__(self, from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
         self.ob_weight = ob_weight
         self.weekend_pattern_const = weekend_pattern_const
 
@@ -70,6 +73,7 @@ class Solver():
         self.to_date = to_date
         self.num_days = (to_date - from_date).days + 1
         self.employees = employees
+        self.employees_far = employees_far
         self.days = [i for i in range(from_date.day, to_date.day+1)]
         self.weeks = range(int(from_date.strftime("%V")), int(to_date.strftime("%V")) + 1 )
         self.shift_types = ['F4', 'F1', 'F2', 'F3','F8','F5','F6','F7', 'EXTRA']
@@ -91,12 +95,13 @@ class Solver():
         max_n_split_employee_for_week = self.max_n_split_employee_for_week
         ob_weight = self.ob_weight
         weekend_pattern_const = self.weekend_pattern_const
-        map_slot_hours_t_i = compute_dict_slot_hours(slots_data, slots_data_sat, slots_data_sun, self.from_date, self.num_days)
+        map_slot_hours_t_i = compute_dict_slot_hours(slots_data, self.employees, self.from_date, self.num_days)
         self.map_slot_hours_t_i = map_slot_hours_t_i
 
         days = self.days
         weeks = self.weeks
         employees = self.employees
+        employees_far = self.employees_far
         shift_types = self.shift_types
         n_shifts = self.n_shifts
 
@@ -108,6 +113,8 @@ class Solver():
         min_max_hours_emp_week = LpVariable.dicts("min max hours week employee", (['min','max'], weeks), cat='Continuous')
         min_max_split_emp = LpVariable.dicts("min max split shift day employee", ['min','max'], cat='Integer')
         min_max_split_emp_week = LpVariable.dicts("min max split shift day week employee", (['min','max'], weeks), cat='Integer')
+        min_max_split_emp_far = LpVariable.dicts("min max split shift day employee far", ['min','max'], cat='Integer')
+
         min_max_leave_emp = LpVariable.dicts("min max leave employee", ['min','max'], cat='Integer')
         min_max_leave_emp_week = LpVariable.dicts("min max leave week employee", (['min','max'], weeks), cat='Integer')
         min_max_extra_slot = LpVariable.dicts("min max extra slot for day", ['min','max'], cat='Integer')
@@ -120,29 +127,12 @@ class Solver():
         problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 50 +\
                     (min_max_split_emp['max'] - min_max_split_emp['min']) * 30 +\
                     (min_max_hours_emp['max'] - min_max_hours_emp['min']) * 10 +\
-                    lpSum(variance_extra_slot[d] for d in days)/len(days) * 30
+                    lpSum(variance_extra_slot[d] for d in days)/len(days) * 30 +\
+                    (min_max_split_emp_far['max'] - min_max_split_emp['min'])  * 10 +\
+                    min_max_split_emp_far['max'] * 10
                     #(min_max_extra_slot['max'] - min_max_extra_slot['min']) * 10
 
-            
-        '''
-        problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 5 +\
-            lpSum(min_max_leave_emp_week['max'][week] - min_max_leave_emp_week['min'][week] for week in weeks) * 10 +\
-            lpSum(min_max_hours_emp_week['max'][week] - min_max_hours_emp_week['min'][week] for week in weeks) * 1 +\
-                    (min_max_hours_emp['max'] - min_max_hours_emp['min']) * ob_weight[0] +\
-                    (min_max_leave_emp['max'] - min_max_leave_emp['min']) * ob_weight[1] +\
-                    (min_max_split_emp['max'] - min_max_split_emp['min']) * ob_weight[3] +\
-            # - lpSum(leave[d][e] for e in employees for d in days) * ob_weight[2] +\
-            # lpSum(split_shift_emp[d][e] for e in employees for d in days) * ob_weight[4]  
-            #lpSum(diff_leave_sun_sat_emp[e] for e in employees) * ob_weight[5] +\
-            #lpSum(leave_gap_2_days[d][e] for e in employees for d in days[:-1]) * ob_weight[6] 
-        '''
         ## Auxilary Constraints ##
-        '''# Variance
-        for e in employees:
-        c = lpSum(shifts[d][i][e] * map_slot_hours_t_i[d][i].duration for d in days for i in self.get_indexes_shift(d) )
-        problem += diff_hours_emp[e] >= c - lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees)
-        problem += diff_hours_emp[e] >=  lpSum( (shifts[d][i][ee]) * map_slot_hours_t_i[d][i].duration for ee in employees for d in days for i in self.get_indexes_shift(d))/len(employees) - c
-        '''
         
         # Constraint 0: min_max_hours_emp compute min max hours
         for e in employees:
@@ -163,10 +153,16 @@ class Solver():
                     problem += shifts[d][i][e] + leave[d][e] <= 1
         
         # Constraint 0: min_max_split_emp compute min max N split for each employee
-        for e in employees:
+        for e in set(employees) - set(employees_far):
             sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
             problem += min_max_split_emp['max'] >= sum_split_e
             problem += min_max_split_emp['min'] <= sum_split_e
+
+        # Constraint 0: min_max_split_emp compute min max N split for each employee
+        for e in employees_far:
+            sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
+            problem += min_max_split_emp_far['max'] >= sum_split_e
+            problem += min_max_split_emp_far['min'] <= sum_split_e
 
         # Constraint 0: min_max_extra_slot compute min max extra slot for day
         for d in days:
@@ -182,7 +178,7 @@ class Solver():
             problem += variance_extra_slot[d] >= mx - x
 
         # Constraint 0: same above for weeks
-        for e in employees:
+        for e in set(employees) - set(employees_far):
             for week in weeks:
                 sum_split_week = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day and map_slot_hours_t_i[d][0].week == week)
                 problem += min_max_split_emp_week['max'][week] >= sum_split_week
@@ -353,6 +349,10 @@ class Solver():
     def add_c_employee_shiftDay_leave(self, employee, day, shift_type, n_shift):
         self.problem+= self.shifts[day][shift_type][n_shift][employee] == 0
 
+    def add_c_employee_shiftType_leave(self, employee, day, shift_type):
+        c = lpSum(self.shifts[day][i][employee] for i in self.get_indexes_shift(day, shift_type))   
+        self.problem+= c == 0
+
     def get_indexes_shift(self, day, type = None):
         ret = []
         for el in self.map_slot_hours_t_i[day].values():
@@ -370,13 +370,17 @@ class Solver():
             ret[n_week].append(d)
         return ret
             
-def compute_dict_slot_hours(slot_week, slot_sat, slot_sun, from_date, n_day):
-    n_extra_slot = 1
+def compute_dict_slot_hours(slot_data, employees, from_date, n_day):
+    slot_week = copy.deepcopy(slot_data)
+    for key in slot_week:
+        slot_week[key] = [slot for slot in slot_week[key] if 'min_emp' not in slot or len(employees)>=slot['min_emp']]
+
+    n_extra_slot = N_EXTRA_SLOT
     map_slot_hours_t_i  = collections.defaultdict(dict)
     for d in range(0, n_day):
         dt = from_date + timedelta(days=d)
         map_slot_hours_t_i[dt.day] = dict()
-        for j in range(len(slot_week) + n_extra_slot):
+        for j in range(len(slot_week[1]) + n_extra_slot):
             map_slot_hours_t_i[dt.day][j] = TimeSlot(date=dt)
     last_type = None
     slots = None
@@ -384,12 +388,7 @@ def compute_dict_slot_hours(slot_week, slot_sat, slot_sun, from_date, n_day):
         j = 0
         dt = from_date + timedelta(days=d)
 
-        if dt.isoweekday() in [6]:
-            slots = slot_sat
-        elif dt.isoweekday() in [7]:
-            slots = slot_sun
-        else:
-            slots = slot_week
+        slots = slot_week.get(dt.isoweekday(), slot_week[1])
 
         for i in slots:
             map_slot_hours_t_i[dt.day][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
