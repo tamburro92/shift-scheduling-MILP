@@ -74,7 +74,7 @@ class Solver():
         self.num_days = (to_date - from_date).days + 1
         self.employees = employees
         self.employees_far = employees_far
-        self.days = [i for i in range(from_date.day, to_date.day+1)]
+        self.days = [(from_date + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(self.num_days)]
         self.weeks = range(int(from_date.strftime("%V")), int(to_date.strftime("%V")) + 1 )
         self.shift_types = ['F4', 'F1', 'F2', 'F3','F8','F5','F6','F7', 'EXTRA']
         self.n_shifts = [i for i in range(11)]
@@ -293,15 +293,15 @@ class Solver():
             for e in employees:
                 c1, c2 = None, None
                 l_list = []
-                for d in days:
+                for idx, d in enumerate(days):
                     if map_slot_hours_t_i[d][0].day_of_week in [6]:
                         c1 += leave[d][e]
                     if map_slot_hours_t_i[d][0].day_of_week in [7]:
                         c2 += leave[d][e]
-                    if map_slot_hours_t_i[d][0].day_of_week in [6] and d+1 <=days[-1]:
-                        l = LpVariable(f'weekend leave {d} {d+1} {e}', lowBound=0, upBound=1, cat='Binary')
-                        problem += l * 2 <= leave[d][e] + leave[d+1][e]
-                        problem += l >= leave[d][e] + leave[d+1][e] - 1
+                    if map_slot_hours_t_i[d][0].day_of_week in [6] and idx+1 < len(days):
+                        l = LpVariable(f'weekend leave {d} {days[idx+1]} {e}', lowBound=0, upBound=1, cat='Binary')
+                        problem += l * 2 <= leave[d][e] + leave[days[idx+1]][e]
+                        problem += l >= leave[d][e] + leave[days[idx+1]][e] - 1
                         l_list.append(l)
 
                 #if c1: problem += c1 >= 2
@@ -377,26 +377,29 @@ def compute_dict_slot_hours(slot_data, employees, from_date, n_day):
 
     n_extra_slot = N_EXTRA_SLOT
     map_slot_hours_t_i  = collections.defaultdict(dict)
-    for d in range(0, n_day):
-        dt = from_date + timedelta(days=d)
-        map_slot_hours_t_i[dt.day] = dict()
+    
+    days = [(from_date + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(n_day)]
+    for d in days:
+        dt = datetime.strptime(d, '%d-%m-%Y')
+
+        map_slot_hours_t_i[d] = dict()
         for j in range(len(slot_week[1]) + n_extra_slot):
-            map_slot_hours_t_i[dt.day][j] = TimeSlot(date=dt)
+            map_slot_hours_t_i[d][j] = TimeSlot(date=dt)
     last_type = None
     slots = None
-    for d in range(0, n_day):
+    for d in days:
+        dt = datetime.strptime(d, '%d-%m-%Y')
         j = 0
-        dt = from_date + timedelta(days=d)
 
         slots = slot_week.get(dt.isoweekday(), slot_week[1])
 
         for i in slots:
-            map_slot_hours_t_i[dt.day][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
+            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
             j+=1
 
         for _ in range(n_extra_slot):
             i = extra_slot
-            map_slot_hours_t_i[dt.day][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
+            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
             j+=1
 
     return map_slot_hours_t_i
