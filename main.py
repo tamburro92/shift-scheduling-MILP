@@ -9,8 +9,8 @@ def main():
     weekend_pattern_const = True
     from_date = date(2024, 10, 7)
     to_date = date(2024, 11, 3)
-    employees = ['Raffaele', 'Roberta', 'Giacomo', 'Nunzia', 'Pouya', 'Viviana', 'Farmacista7']
-    employees_far = ['Giacomo', 'Nunzia', 'Pouya']
+    employees = ['Raffaele', 'Roberta', 'Giacomo', 'Nunzia', 'Pouya', 'Viviana', 'Bianca']
+    employees_far = ['Giacomo', 'Nunzia', 'Pouya', 'Bianca']
 
     max_h_employee_for_day = 8
     min_h_employee_for_day = 5

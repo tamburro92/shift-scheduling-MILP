@@ -1,7 +1,7 @@
 # shift-scheduling-MILP
 A real problem of shift scheduling solved using MILP
 
-### What is?
+## What is?
 This is a shift planner, that takes data from main.py and returns a CSV with daily shifts for each worker.
 
 ### Problem Description
@@ -45,14 +45,16 @@ We want allocate all shifts in a month to all employees.
 * Maximaze number of leaving days
 * Minimaze variance of leaving days
 
-
 ### Output
 
 This program returns the turns for each worker during the week, according to the constraints, in a CSV file called schedule.csv.
 
-### Execution
+## Requirements
 
-To run, you have to install PuLP.
+To run, you have to install PuLP and a solver.
+Suggested solver like HiGHS produce faster result:
+[HiGHS](https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases)
+
 Then, in shell:
 
     python main.py
