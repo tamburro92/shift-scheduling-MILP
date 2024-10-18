@@ -9,16 +9,18 @@ def main():
     weekend_pattern_const = True
     from_date = date(2024, 10, 7)
     to_date = date(2024, 11, 3)
+
     employees = ['Raffaele', 'Roberta', 'Giacomo', 'Nunzia', 'Pouya', 'Viviana', 'Bianca']
     employees_far = ['Giacomo', 'Nunzia', 'Pouya', 'Bianca']
 
-    max_h_employee_for_day = 8
-    min_h_employee_for_day = 5
-    max_h_employee_for_week = 37
-    min_h_employee_for_week = 35
-    max_n_split_employee_for_week = 5
+    max_h_employee_for_day = 8 
+    min_h_employee_for_day = 6
+    max_h_employee_for_week = 38
+    min_h_employee_for_week = 35 
+    max_n_split_employee_for_week = 5 
+    max_n_split_employee_far_for_week = 1
 
-    solver = Solver(from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight, weekend_pattern_const)
+    solver = Solver(from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_n_split_employee_far_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight, weekend_pattern_const)
     
     '''
     solver.add_c_employee_day_leave('Bianca', 9)

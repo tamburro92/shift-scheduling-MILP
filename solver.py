@@ -21,14 +21,14 @@ Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 #F1/2 - 5/6 spezzati
 slots_data = {}
 slots_data[1] = [{'from':'08:00', 'to':'12:00', 'type':'F1'},
-              {'from':'08:00', 'to':'13:00', 'type':'F1'},
+              {'from':'08:00', 'to':'14:00', 'type':'F3'},
               {'from':'09:00', 'to':'13:00', 'type':'F1', 'min_emp':7},
               {'from':'12:00', 'to':'20:00', 'type':'F3'},
               {'from':'13:00', 'to':'21:00', 'type':'F3'},
               {'from':'16:00', 'to':'20:00', 'type':'F2', 'min_emp':7},
               {'from':'17:00', 'to':'20:00', 'type':'F2'}]
 slots_data[2] =[{'from':'08:00', 'to':'12:00', 'type':'F1'},
-              {'from':'08:00', 'to':'13:00', 'type':'F1'},
+              {'from':'08:00', 'to':'14:00', 'type':'F3'},
               {'from':'09:00', 'to':'13:00', 'type':'F1', 'min_emp':7},
               {'from':'12:00', 'to':'20:00', 'type':'F3'},
               {'from':'13:00', 'to':'20:30', 'type':'F3'},
@@ -65,7 +65,7 @@ class TimeSlot():
         self.idx_of_day = idx
 
 class Solver():
-    def __init__(self, from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
+    def __init__(self, from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_n_split_employee_far_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
         self.ob_weight = ob_weight
         self.weekend_pattern_const = weekend_pattern_const
 
@@ -81,6 +81,7 @@ class Solver():
         self.max_h_employee_for_day = max_h_employee_for_day
         self.min_h_employee_for_day = min_h_employee_for_day
         self.max_n_split_employee_for_week = max_n_split_employee_for_week
+        self.max_n_split_employee_far_for_week = max_n_split_employee_far_for_week
         self.max_h_employee_for_week = max_h_employee_for_week
         self.min_h_employee_for_week = min_h_employee_for_week
 
@@ -93,6 +94,7 @@ class Solver():
         max_h_employee_for_week = self.max_h_employee_for_week
         min_h_employee_for_week = self.min_h_employee_for_week
         max_n_split_employee_for_week = self.max_n_split_employee_for_week
+        max_n_split_employee_far_for_week = self.max_n_split_employee_far_for_week
         ob_weight = self.ob_weight
         weekend_pattern_const = self.weekend_pattern_const
         map_slot_hours_t_i = compute_dict_slot_hours(slots_data, self.employees, self.from_date, self.num_days)
@@ -124,12 +126,15 @@ class Solver():
         problem = LpProblem("Shift", LpMinimize)
 
         # Objective: minimize
-        problem +=   lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 50 +\
-                    (min_max_split_emp['max'] - min_max_split_emp['min']) * 30 +\
+        problem +=  lpSum(min_max_split_emp_week['max'][week] - min_max_split_emp_week['min'][week] for week in weeks) * 50 +\
+                    (min_max_split_emp['max'] - min_max_split_emp['min']) * 40 +\
                     (min_max_hours_emp['max'] - min_max_hours_emp['min']) * 10 +\
                     lpSum(variance_extra_slot[d] for d in days)/len(days) * 30 +\
-                    (min_max_split_emp_far['max'] - min_max_split_emp['min'])  * 10 +\
-                    min_max_split_emp_far['max'] * 10
+                    (min_max_split_emp_far['max'] - min_max_split_emp_far['min']) * 40 +\
+                    - 40 * lpSum(shifts[d][i][e] for week in weeks for e in employees_far for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day and map_slot_hours_t_i[d][0].week == week ) #sum of all split employees far
+                    #( min_max_hours_emp['max']) * 40
+                    #- min_max_split_emp_far['max'] * 10
+                    #(min_max_split_emp['min'] - min_max_split_emp_far['min'])  * 10
                     #(min_max_extra_slot['max'] - min_max_extra_slot['min']) * 10
 
         ## Auxilary Constraints ##
@@ -155,14 +160,14 @@ class Solver():
         # Constraint 0: min_max_split_emp compute min max N split for each employee
         for e in set(employees) - set(employees_far):
             sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
-            problem += min_max_split_emp['max'] >= sum_split_e
-            problem += min_max_split_emp['min'] <= sum_split_e
+            problem += min_max_split_emp['max'] * 2 >= sum_split_e
+            problem += min_max_split_emp['min'] * 2 <= sum_split_e
 
         # Constraint 0: min_max_split_emp compute min max N split for each employee
         for e in employees_far:
             sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
-            problem += min_max_split_emp_far['max'] >= sum_split_e
-            problem += min_max_split_emp_far['min'] <= sum_split_e
+            problem += min_max_split_emp_far['max'] * 2 >= sum_split_e
+            problem += min_max_split_emp_far['min'] * 2 <= sum_split_e
 
         # Constraint 0: min_max_extra_slot compute min max extra slot for day
         for d in days:
@@ -256,15 +261,18 @@ class Solver():
 
         # Constraint 4: Each Employee should do max N split for week
         for e in employees:
-            for days_in_week in self.get_indexes_group_by_week().values():
-                sum_split_e = lpSum(shifts[d][i][e] for d in days_in_week for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day)
-                problem += sum_split_e <= max_n_split_employee_for_week * 2
+            for week in weeks:
+                sum_split_e = lpSum(shifts[d][i][e] for d in days for i in self.get_indexes_shift(d) if map_slot_hours_t_i[d][i].duration < self.min_h_employee_for_day and map_slot_hours_t_i[d][0].week == week)
+                if e in employees_far:
+                    problem += sum_split_e <= max_n_split_employee_far_for_week * 2
+                else:
+                    problem += sum_split_e <= max_n_split_employee_for_week * 2
 
 
         # Constraint 5: Each Employee should work exactly 5 days in a week
         for e in employees:
-            for days_in_week in self.get_indexes_group_by_week().values():
-                c = lpSum(( 1  - leave[d][e]) for d in days_in_week) # work_day = 1 - leave
+            for week in weeks:
+                c = lpSum(( 1  - leave[d][e]) for d in days if map_slot_hours_t_i[d][0].week == week) # work_day = 1 - leave
                 problem += c == 5 
         
         # Constraint 6: Each Employee should have a weekend dayoff each 4 weeks (in a month)
