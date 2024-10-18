@@ -1,5 +1,6 @@
 from datetime import date
-from solver import Solver, save_csv, response_build
+from solver import Solver
+from printing import  save_csv, response_build, save_excel
 from pulp import LpStatus
 
 def main():
@@ -16,7 +17,7 @@ def main():
     max_h_employee_for_day = 8 
     min_h_employee_for_day = 6
     max_h_employee_for_week = 38
-    min_h_employee_for_week = 35 
+    min_h_employee_for_week = 36
     max_n_split_employee_for_week = 5 
     max_n_split_employee_far_for_week = 1
 
@@ -50,7 +51,8 @@ def main():
     print('status', LpStatus[status])
 
     save_csv(solver, 'calendar.csv')
-    print(response_build(solver))
+    save_excel(solver, 'calendar.csv', 'calendar.xlsx')
+    #print(response_build(solver))
 
 if __name__ == '__main__':
     main()
