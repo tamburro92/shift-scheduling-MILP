@@ -55,6 +55,11 @@ To run, you have to install PuLP and a solver.
 Suggested solver like HiGHS produce faster result:
 [HiGHS](https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases)
 
+    wget https://github.com/JuliaBinaryWrappers/HiGHSstatic_jll.jl/releases/download/HiGHSstatic-v1.8.0%2B0/HiGHSstatic.v1.8.0.aarch64-linux-gnu-cxx11.tar.gz
+    tar -xvzf HiGHSstatic.v1.8.0.aarch64-linux-gnu-cxx11.tar.gz
+    sudo cp HiGHSstatic.v1.8.0.aarch64-linux-gnu-cxx11/bin/highs /usr/local/bin/
+    sudo chmod a+x /usr/local/bin/highs
+
 Then, in shell:
 
     python main.py

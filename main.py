@@ -2,6 +2,7 @@ from datetime import date
 from solver import Solver
 from printing import  save_csv, response_build, save_excel
 from pulp import LpStatus
+import json
 
 def main():
 
@@ -41,18 +42,17 @@ def main():
         solver.add_c_employee_day_leave('Nunzia',i)
     '''
     #status = solver.solve_PULP(timeLimit=200, gapRel = 0.05, threads=16)
-    status = solver.solve_HiGHS(timeLimit=60, gapRel = 0.05, threads=16)
+    status = solver.solve_HiGHS(timeLimit=60, gapRel = 0.05, threads=16, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs')
 
     #status = solver.solve_GUROBI(timeLimit=60, gapRel = 0.05, threads=16)
     #status = solver.solve_SCIP(timeLimit=120, gapRel = 0.05, threads=16)
     #status = solver.solve_GLPK(timeLimit=120)
 
-
     print('status', LpStatus[status])
 
     save_csv(solver, 'calendar.csv')
     save_excel(solver, 'calendar.csv', 'calendar.xlsx')
-    #print(response_build(solver))
+    print(json.dumps(response_build(solver)))
 
 if __name__ == '__main__':
     main()

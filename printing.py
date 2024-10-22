@@ -3,6 +3,7 @@ from openpyxl.styles import PatternFill, colors
 import openpyxl
 import csv
 import json
+from pulp import LpStatus
 
 MIP_TOLERANCE = 1e-6
 FORMAT_DATE = "%d/%m/%Y"
@@ -125,8 +126,14 @@ def response_build(solver):
     leave_gap_2_days = solver.leave_gap_2_days
 
 
-    response = {}
+    response = {} 
     scheduling = {}
+    response['status'] = LpStatus[solver.status] # Not Solved, Optimal, Infeasible, Unbounded, Undefined
+    response['from_date'] = solver.from_date.strftime(FORMAT_DATE)
+    response['to_date'] = solver.to_date.strftime(FORMAT_DATE)
+    response['num_days'] = solver.num_days
+    response['employees'] = solver.employees
+    response['employees_far'] = solver.employees_far
     response['scheduling'] = scheduling
     # loop
     for d in days:
@@ -137,11 +144,12 @@ def response_build(solver):
                 if abs(1 - shifts[d][i][e].varValue) <= MIP_TOLERANCE:
                     date_str = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
                     shift = {}
-                    shift['giorno'] = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
-                    shift['da'] = f'{map_slot_hours_t_i[d][i].t_from.strftime("%H:%M")} - {map_slot_hours_t_i[d][i].t_to.strftime("%H:%M")}'
-                    shift['durata'] = map_slot_hours_t_i[d][i].duration
-                    shift['tipo'] = map_slot_hours_t_i[d][i].type
-                    shift['nome'] = e
+                    shift['day'] = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
+                    shift['from'] = f'{map_slot_hours_t_i[d][i].t_from.strftime("%H:%M")}'
+                    shift['to'] = f'{map_slot_hours_t_i[d][i].t_to.strftime("%H:%M")}'
+                    shift['duratoin'] = map_slot_hours_t_i[d][i].duration
+                    shift['type'] = map_slot_hours_t_i[d][i].type
+                    shift['employee'] = e
                     if date_str not in scheduling:
                          scheduling[date_str] = []
                     scheduling[date_str].append(shift)              
@@ -160,7 +168,7 @@ def response_build(solver):
                          scheduling[date_str] = []
                     scheduling[date_str].append(shift)   
     
-    return json.dumps(response)
+    return response
 
 def save_excel(solver, name_csv, name_excel):
     COLOR_INDEX = (

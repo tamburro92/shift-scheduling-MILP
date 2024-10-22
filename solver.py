@@ -334,8 +334,8 @@ class Solver():
         self.status = self.problem.solve(GLPK_CMD(timeLimit=timeLimit))
         return self.status
  
-    def solve_HiGHS(self, timeLimit=8, gapRel = 0.02, threads=1):
-        self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path='HiGHSstatic.v1.7.1.aarch64-apple-darwin/bin/highs', options=[f"mip_feasibility_tolerance = {MIP_TOLERANCE}"]))
+    def solve_HiGHS(self, timeLimit=8, gapRel = 0.02, threads=1, path='/usr/local/bin/highs'):
+        self.status = self.problem.solve(HiGHS_CMD(timeLimit=timeLimit, gapRel = gapRel, threads=threads, path=path, options=[f"mip_feasibility_tolerance = {MIP_TOLERANCE}"]))
         return self.status
     
     def solve_SCIP(self, timeLimit=8, gapRel = 0.02, threads=1):
