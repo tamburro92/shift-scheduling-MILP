@@ -9,8 +9,8 @@ def main():
     ob_weight = (50, 33, 10, 10)
     
     weekend_pattern_const = True
-    from_date = date(2024, 10, 7)
-    to_date = date(2024, 11, 3)
+    from_date = date(2024, 12, 9)
+    to_date = date(2025,1, 5)
 
     employees = ['Raffaele', 'Roberta', 'Giacomo', 'Nunzia', 'Pouya', 'Viviana', 'Bianca']
     employees_far = ['Giacomo', 'Nunzia', 'Pouya', 'Bianca']

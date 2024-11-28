@@ -36,7 +36,9 @@ def save_csv(solver, name_csv):
         map_e_spezzati[e] = {}
         map_e_h[e]['total'] = 0
         map_e_leave[e]['total'] = 0
-        for w in range(int(from_date.strftime('%V')), int(to_date.strftime('%V'))+1):
+
+        weeks = solver.get_weeks_between_dates(from_date, to_date)
+        for w in weeks:
             map_e_h[e][w] = 0
             map_e_leave[e][w] = 0
         for d in days:
@@ -147,8 +149,10 @@ def response_build(solver):
                     shift['day'] = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
                     shift['from'] = f'{map_slot_hours_t_i[d][i].t_from.strftime("%H:%M")}'
                     shift['to'] = f'{map_slot_hours_t_i[d][i].t_to.strftime("%H:%M")}'
-                    shift['duratoin'] = map_slot_hours_t_i[d][i].duration
+                    shift['duration'] = map_slot_hours_t_i[d][i].duration
                     shift['type'] = map_slot_hours_t_i[d][i].type
+                    shift['id'] = map_slot_hours_t_i[d][i].id
+                    shift['period'] = map_slot_hours_t_i[d][i].period
                     shift['employee'] = e
                     if date_str not in scheduling:
                          scheduling[date_str] = []
@@ -159,11 +163,14 @@ def response_build(solver):
             if abs(1 - leave[d][e].varValue) <= MIP_TOLERANCE:
                     date_str = map_slot_hours_t_i[d][i].date.strftime(FORMAT_DATE)
                     shift = {}
-                    shift['giorno'] = map_slot_hours_t_i[d][0].date.strftime(FORMAT_DATE)
-                    shift['da'] = ''
-                    shift['durata'] = ''
-                    shift['tipo'] = 'Riposo'
-                    shift['nome'] = e
+                    shift['day'] = map_slot_hours_t_i[d][0].date.strftime(FORMAT_DATE)
+                    shift['from'] = ''
+                    shift['to'] = ''
+                    shift['duration'] = ''
+                    shift['type'] = 'Riposo'
+                    shift['id'] = -1
+                    shift['period'] = 'LV'
+                    shift['employee'] = e
                     if date_str not in scheduling:
                          scheduling[date_str] = []
                     scheduling[date_str].append(shift)   

@@ -20,26 +20,26 @@ Senior: 'Raffaele', 'Grazia', 'Nunzia', 'Roberta', 'Francesca'
 #36h 61, w=377
 #F1/2 - 5/6 spezzati
 slots_data = {}
-slots_data[1] = [{'from':'08:00', 'to':'12:00', 'type':'F1'},
-                {'from':'08:00', 'to':'14:00', 'type':'F3'},
-                {'from':'09:00', 'to':'13:00', 'type':'F1', 'min_emp':7},
-                {'from':'12:00', 'to':'19:00', 'type':'F3'},
-                {'from':'13:00', 'to':'21:00', 'type':'F3'},
-                {'from':'16:00', 'to':'20:00', 'type':'F2', 'min_emp':7},
-                {'from':'17:00', 'to':'20:00', 'type':'F2'}]
+slots_data[1] = [{'from':'08:00', 'to':'12:00', 'type':'F1', 'id':1, 'period':'AM'},
+                {'from':'08:00', 'to':'14:00', 'type':'F3', 'id':2, 'period':'AM'},
+                {'from':'09:00', 'to':'13:00', 'type':'F1', 'id':3, 'period':'AM', 'min_emp':7},
+                {'from':'12:00', 'to':'19:00', 'type':'F3', 'id':4, 'period':'PM'},
+                {'from':'13:00', 'to':'21:00', 'type':'F3', 'id':5, 'period':'PM'},
+                {'from':'16:00', 'to':'20:00', 'type':'F2', 'id':6, 'period':'EV', 'min_emp':7},
+                {'from':'17:00', 'to':'20:00', 'type':'F2', 'id':7, 'period':'EV'}]
 
-slots_data[6] = [{'from':'08:00', 'to':'16:00', 'type':'F8'}, 
-                {'from':'09:00', 'to':'13:00', 'type':'F5'},
-                {'from':'10:00', 'to':'13:00', 'type':'F5'},
-                {'from':'16:00', 'to':'20:00', 'type':'F6'},
-                {'from':'16:00', 'to':'21:00', 'type':'F6'}]
+slots_data[6] = [{'from':'08:00', 'to':'16:00', 'type':'F8', 'id':8, 'period':'AM'},
+                {'from':'09:00', 'to':'13:00', 'type':'F5', 'id':9, 'period':'AM'},
+                {'from':'10:00', 'to':'13:00', 'type':'F5', 'id':10, 'period':'AM'},
+                {'from':'16:00', 'to':'20:00', 'type':'F6', 'id':11, 'period':'EV'},
+                {'from':'16:00', 'to':'21:00', 'type':'F6', 'id':12, 'period':'EV'}]
 
 slots_data[2] = slots_data[1]
 slots_data[5] = slots_data[1]
 slots_data[3] = slots_data[4] = slots_data[2]
 slots_data[7] = slots_data[6] 
 
-extra_slot = {'from':'13:30', 'to':'20:00', 'type':'EXTRA'}
+extra_slot = {'from':'13:30', 'to':'20:00', 'type':'EXTRA', 'id':99, 'period': 'EV'}
 
 N_EXTRA_SLOT = 1
 
@@ -48,7 +48,7 @@ MIP_TOLERANCE = 1e-6
 FORMAT_DATE = "%d/%m/%Y"
 
 class TimeSlot():
-    def __init__(self, t_from=None, t_to=None, type=None, isOpening=False, isClosing=False, date=None, idx=None):
+    def __init__(self, t_from=None, t_to=None, type=None, isOpening=False, isClosing=False, id= None, period=None, date=None, idx=None):
         self.day = date.day
         self.t_from = datetime.strptime(t_from,'%H:%M') if t_from else None
         self.t_to = datetime.strptime(t_to,'%H:%M') if t_to else None
@@ -60,6 +60,8 @@ class TimeSlot():
         self.day_of_week = date.isoweekday() if date else None
         self.date = date
         self.idx_of_day = idx
+        self.id = id
+        self.period = period
 
 class Solver():
     def __init__(self, from_date, to_date, employees, employees_far, max_h_employee_for_day, min_h_employee_for_day, max_n_split_employee_for_week, max_n_split_employee_far_for_week, max_h_employee_for_week, min_h_employee_for_week, ob_weight = (0.3,0.2,0.3), weekend_pattern_const = False):
@@ -71,8 +73,8 @@ class Solver():
         self.num_days = (to_date - from_date).days + 1
         self.employees = employees
         self.employees_far = employees_far
-        self.days = [(from_date + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(self.num_days)]
-        self.weeks = range(int(from_date.strftime("%V")), int(to_date.strftime("%V")) + 1 )
+        self.days = [(from_date + timedelta(days=i)).strftime(FORMAT_DATE) for i in range(self.num_days)]
+        self.weeks = self.get_weeks_between_dates(from_date, to_date)
         self.shift_types = ['F4', 'F1', 'F2', 'F3','F8','F5','F6','F7', 'EXTRA']
         self.n_shifts = [i for i in range(11)]
         self.max_h_employee_for_day = max_h_employee_for_day
@@ -83,6 +85,19 @@ class Solver():
         self.min_h_employee_for_week = min_h_employee_for_week
 
         self.__build_problem()
+
+
+    # Funzione per ottenere tutte le settimane tra due date
+    def get_weeks_between_dates(self, start_date, end_date):
+        weeks = []
+        current_date = start_date
+
+        while current_date <= end_date:
+            week_id = int(current_date.strftime("%V"))
+            weeks.append(week_id)
+            current_date += timedelta(weeks=1)
+        
+        return weeks
 
     def __build_problem(self):
         
@@ -348,15 +363,15 @@ class Solver():
     def add_c_employee_day_work(self, employee, day_leave):
         self.problem+= self.leave[day_leave][employee] == 0
 
-    def add_c_employee_shiftDay_work(self, employee, day, shift_type, n_shift):
-        self.problem+= self.shifts[day][shift_type][n_shift][employee] == 1
+    def add_c_employee_shiftDay_work(self, employee, day, shift_id):
+        index = self.get_index_by_shift_id(day, shift_id)
+        if index >=0:
+            self.problem+= self.shifts[day][index][employee] == 1
 
-    def add_c_employee_shiftDay_leave(self, employee, day, shift_type, n_shift):
-        self.problem+= self.shifts[day][shift_type][n_shift][employee] == 0
-
-    def add_c_employee_shiftType_leave(self, employee, day, shift_type):
-        c = lpSum(self.shifts[day][i][employee] for i in self.get_indexes_shift(day, shift_type))   
-        self.problem+= c == 0
+    def add_c_employee_shiftDay_leave(self, employee, day, shift_id):
+        index = self.get_index_by_shift_id(day, shift_id)
+        if index >=0:
+            self.problem+= self.shifts[day][index][employee] == 0
 
     def get_indexes_shift(self, day, type = None):
         ret = []
@@ -365,6 +380,12 @@ class Solver():
                 if (type and type == el.type) or not type:
                     ret.append(el.idx_of_day)
         return ret
+    def get_index_by_shift_id(self, day, shift_id):
+        ret = []
+        for el in self.map_slot_hours_t_i[day].values():
+            if el.idx_of_day is not None and el.id == shift_id :
+                    return el.idx_of_day
+        return -1
     
     def get_indexes_group_by_week(self):
         ret = {}
@@ -383,9 +404,9 @@ def compute_dict_slot_hours(slot_data, employees, from_date, n_day):
     n_extra_slot = N_EXTRA_SLOT
     map_slot_hours_t_i  = collections.defaultdict(dict)
     
-    days = [(from_date + timedelta(days=i)).strftime('%d-%m-%Y') for i in range(n_day)]
+    days = [(from_date + timedelta(days=i)).strftime(FORMAT_DATE) for i in range(n_day)]
     for d in days:
-        dt = datetime.strptime(d, '%d-%m-%Y')
+        dt = datetime.strptime(d, FORMAT_DATE)
 
         map_slot_hours_t_i[d] = dict()
         for j in range(len(slot_week[1]) + n_extra_slot):
@@ -393,18 +414,18 @@ def compute_dict_slot_hours(slot_data, employees, from_date, n_day):
     last_type = None
     slots = None
     for d in days:
-        dt = datetime.strptime(d, '%d-%m-%Y')
+        dt = datetime.strptime(d, FORMAT_DATE)
         j = 0
 
         slots = slot_week.get(dt.isoweekday(), slot_week[1])
 
         for i in slots:
-            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
+            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), i['id'], i['period'], dt, j)
             j+=1
 
         for _ in range(n_extra_slot):
             i = extra_slot
-            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), dt, j)
+            map_slot_hours_t_i[d][j] = TimeSlot(i['from'], i['to'], i['type'], i.get('isOpening',False), i.get('isClosing',False), i['id'], i['period'], dt, j)
             j+=1
 
     return map_slot_hours_t_i
